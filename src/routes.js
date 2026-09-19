@@ -246,7 +246,6 @@ async function notifyPartner(sender, scribble) {
       },
       android: {
         priority: 'high',
-        collapseKey: 'scribble',
         ttl: 24 * 60 * 60 * 1000,
       },
     });
