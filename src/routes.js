@@ -301,7 +301,8 @@ router.post('/scribbles', sendLimiter, upload.single('image'), async (req, res) 
 
   if (error) throw error;
 
-  notifyPartner(me, scribble).catch((e) => console.error('FCM error', e));
+  // Await FCM notification so it isn't dropped on Render's free tier before the process idles
+  await notifyPartner(me, scribble);
   res.status(201).json(toScribbleDto(scribble));
 });
 
