@@ -150,25 +150,28 @@ router.post('/pair', async (req, res) => {
   const { code } = z
     .object({ code: z.string().trim().toUpperCase().length(6) })
     .parse(req.body);
-
+  console.log(code)
   const { data: me } = await supabase
     .from('users')
     .select('*')
     .eq('uid', req.uid)
     .maybeSingle();
-
+  console.log("hello there 1" + me);
   const { data: partner } = await supabase
     .from('users')
     .select('*')
     .eq('invite_code', code)
     .maybeSingle();
+  console.log("hello there 2" + partner);
 
   if (!me || !partner) return res.status(404).json({ error: 'not_found' });
   if (partner.uid === me.uid) return res.status(400).json({ error: 'cannot_pair_self' });
 
   // If already paired with each other, return current user DTO
   if (me.partner_uid === partner.uid && partner.partner_uid === me.uid) {
+    console.log("hello 3")
     return res.json(await toUserDto(me));
+
   }
 
   // Atomic pairing: only succeed if both sides are currently unpaired
@@ -178,8 +181,9 @@ router.post('/pair', async (req, res) => {
     .eq('uid', me.uid)
     .is('partner_uid', null)
     .select('*');
-
+  console.log("hello 4" + updatedMe);
   if (errMe || !updatedMe || updatedMe.length === 0) {
+    console.log("hello 5")
     return res.status(409).json({ error: 'already_paired' });
   }
 
@@ -189,15 +193,17 @@ router.post('/pair', async (req, res) => {
     .eq('uid', partner.uid)
     .is('partner_uid', null)
     .select('*');
-
+  console.log("hello 6" + updatedPartner);
   if (errPartner || !updatedPartner || updatedPartner.length === 0) {
     // Rollback me
     await supabase.from('users').update({ partner_uid: null }).eq('uid', me.uid);
+    console.log("hello 7")
     return res.status(409).json({ error: 'partner_already_paired' });
   }
 
   const pairedUser = updatedMe[0];
   pairedUser.partner_uid = partner.uid;
+  console.log("hello 8" + pairedUser)
   res.json(await toUserDto(pairedUser));
 });
 
@@ -207,7 +213,6 @@ router.delete('/pair', async (req, res) => {
     .select('*')
     .eq('uid', req.uid)
     .maybeSingle();
-
   if (me?.partner_uid) {
     await supabase
       .from('users')
