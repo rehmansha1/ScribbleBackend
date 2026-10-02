@@ -210,21 +210,13 @@ router.post('/pair', async (req, res) => {
     try {
       await admin.messaging().sendEachForMulticast({
         tokens: partnerTokens,
-        notification: {
-          title: 'Partner Connected! 🎉',
-          body: `${me.display_name} just paired with you!`,
-        },
         data: {
           type: 'paired',
           partnerName: me.display_name,
         },
         android: {
           priority: 'high',
-          notification: {
-            channelId: 'scribble_pushes',
-            priority: 'high',
-            sound: 'default',
-          },
+          ttl: 24 * 60 * 60 * 1000,
         },
       });
     } catch (e) {
@@ -280,14 +272,10 @@ async function notifyPartner(sender, scribble) {
   console.log(`[notifyPartner] Found ${tokens.length} device token(s) to notify.`);
 
   try {
-    // Step 2: Send FCM Multicast
+    // Step 2: Send FCM Multicast (High-priority Data message wakes up background service & updates widget)
     const tFcm = Date.now();
     const resp = await admin.messaging().sendEachForMulticast({
       tokens,
-      notification: {
-        title: 'New Scribble! 🎨',
-        body: `${sender.display_name} sent you a new scribble`,
-      },
       data: {
         type: 'scribble',
         scribbleId: String(scribble.id),
@@ -297,11 +285,6 @@ async function notifyPartner(sender, scribble) {
       android: {
         priority: 'high',
         ttl: 24 * 60 * 60 * 1000,
-        notification: {
-          channelId: 'scribble_pushes',
-          priority: 'high',
-          sound: 'default',
-        },
       },
     });
     const fcmTime = Date.now() - tFcm;
