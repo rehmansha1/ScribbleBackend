@@ -248,16 +248,29 @@ router.delete('/pair', async (req, res) => {
 // ---- Scribbles -------------------------------------------------------
 
 async function notifyPartner(sender, scribble) {
+  const startTotal = Date.now();
+  console.log(`[notifyPartner] 🚀 Starting notification dispatch for scribble #${scribble.id} at ${new Date().toISOString()}`);
+
+  // Step 1: Query Supabase for partner profile
+  const t0 = Date.now();
   const { data: partner } = await supabase
     .from('users')
     .select('*')
     .eq('uid', sender.partner_uid)
     .maybeSingle();
+  const partnerQueryTime = Date.now() - t0;
+  console.log(`[notifyPartner] ⏱️ Step 1 (Fetch partner from Supabase): ${partnerQueryTime}ms`);
 
   const tokens = partner?.fcm_tokens?.map((t) => t.token) ?? [];
-  if (!tokens.length) return;
+  if (!tokens.length) {
+    console.log(`[notifyPartner] ⚠️ No FCM tokens found for partner ${sender.partner_uid} (Finished in ${Date.now() - startTotal}ms)`);
+    return;
+  }
+  console.log(`[notifyPartner] Found ${tokens.length} device token(s) to notify.`);
 
   try {
+    // Step 2: Send FCM Multicast
+    const tFcm = Date.now();
     const resp = await admin.messaging().sendEachForMulticast({
       tokens,
       data: {
@@ -271,8 +284,10 @@ async function notifyPartner(sender, scribble) {
         ttl: 24 * 60 * 60 * 1000,
       },
     });
+    const fcmTime = Date.now() - tFcm;
+    console.log(`[notifyPartner] ⏱️ Step 2 (FCM sendEachForMulticast): ${fcmTime}ms (Success: ${resp.successCount}, Failure: ${resp.failureCount})`);
 
-    // Prune dead tokens
+    // Step 3: Prune dead tokens if any
     const dead = [];
     resp.responses.forEach((r, i) => {
       const code = r.error?.code;
@@ -286,14 +301,22 @@ async function notifyPartner(sender, scribble) {
     });
 
     if (dead.length) {
+      const tPrune = Date.now();
       const remaining = partner.fcm_tokens.filter((t) => !dead.includes(t.token));
       await supabase
         .from('users')
         .update({ fcm_tokens: remaining })
         .eq('uid', partner.uid);
+      const pruneTime = Date.now() - tPrune;
+      console.log(`[notifyPartner] ⏱️ Step 3 (Prune ${dead.length} dead token(s) in Supabase): ${pruneTime}ms`);
+    } else {
+      console.log(`[notifyPartner] ⏱️ Step 3 (Token check): All tokens valid, no cleanup needed.`);
     }
+
+    const totalTime = Date.now() - startTotal;
+    console.log(`[notifyPartner] ✅ Total notifyPartner execution time: ${totalTime}ms`);
   } catch (err) {
-    console.error('[FCM] Error sending multicast notification:', err.message);
+    console.error(`[FCM] ❌ Error sending multicast notification after ${Date.now() - startTotal}ms:`, err.message);
   }
 }
 
